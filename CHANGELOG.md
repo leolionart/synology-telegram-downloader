@@ -7,3 +7,4 @@
 - Cleaned up README and documentation to frame the project as an independent tool.
 - Updated Docker Compose to use the published GHCR image by default.
 - Upgraded the bot to support full command-driven operations (`/start`, `/help`, `/dl`, `/queue`, `/status`, `/cancel`, `/retry`, `/history`, `/downloads`, `/setdir`, `/config`, `/health`) with in-memory job status tracking, persistent history, admin authorization limits (`ADMIN_CHAT_IDS`), and health audits.
+- Added automatic GitHub release notes for every commit pushed to `main`.
