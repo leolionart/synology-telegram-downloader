@@ -8,3 +8,4 @@
 - Updated Docker Compose to use the published GHCR image by default.
 - Upgraded the bot to support full command-driven operations (`/start`, `/help`, `/dl`, `/queue`, `/status`, `/cancel`, `/retry`, `/history`, `/downloads`, `/setdir`, `/config`, `/health`) with in-memory job status tracking, persistent history, admin authorization limits (`ADMIN_CHAT_IDS`), and health audits.
 - Added automatic GitHub release notes for every commit pushed to `main`.
+- Registered the Telegram command menu and documented how to pull/recreate the container for new GHCR image builds.

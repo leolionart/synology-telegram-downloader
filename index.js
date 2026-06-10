@@ -34,6 +34,26 @@ if (!fs.existsSync(downloadDir)) {
 const bot = new TelegramBot(token, { polling: true });
 console.log('Bot is running and listening for messages...');
 
+const telegramCommands = [
+  { command: 'start', description: 'Hiển thị lời chào và lệnh nhanh' },
+  { command: 'help', description: 'Xem hướng dẫn sử dụng chi tiết' },
+  { command: 'download', description: 'Tải file từ Google Drive hoặc GDrive Index' },
+  { command: 'dl', description: 'Tải nhanh bằng URL' },
+  { command: 'queue', description: 'Xem hàng chờ tải hiện tại' },
+  { command: 'status', description: 'Xem trạng thái tải' },
+  { command: 'cancel', description: 'Hủy một job đang tải' },
+  { command: 'retry', description: 'Tải lại một job cũ' },
+  { command: 'history', description: 'Xem lịch sử tải gần đây' },
+  { command: 'downloads', description: 'Liệt kê file đã tải gần đây' },
+  { command: 'setdir', description: 'Đặt thư mục con tải về' },
+  { command: 'config', description: 'Xem cấu hình không nhạy cảm' },
+  { command: 'health', description: 'Kiểm tra sức khỏe hệ thống' }
+];
+
+bot.setMyCommands(telegramCommands).catch(err => {
+  console.warn('Could not register Telegram command menu:', err.message);
+});
+
 // File Paths for Persistence
 const historyFilePath = path.join(downloadDir, '.synology-telegram-downloader-history.json');
 const settingsFilePath = path.join(downloadDir, '.synology-telegram-downloader-settings.json');

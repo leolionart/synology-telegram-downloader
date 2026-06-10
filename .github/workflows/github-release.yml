@@ -51,11 +51,18 @@ jobs:
           - \`ghcr.io/${REPO}:${short_sha}\`
           NOTES
 
-          git tag "${tag}" "${SHA}"
-          git push origin "${tag}"
+          if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
+            gh release edit "${tag}" \
+              --repo "${REPO}" \
+              --title "${title}" \
+              --notes-file "${notes_file}"
+          else
+            git tag "${tag}" "${SHA}"
+            git push origin "${tag}"
 
-          gh release create "${tag}" \
-            --repo "${REPO}" \
-            --title "${title}" \
-            --notes-file "${notes_file}" \
-            --target "${SHA}"
+            gh release create "${tag}" \
+              --repo "${REPO}" \
+              --title "${title}" \
+              --notes-file "${notes_file}" \
+              --target "${SHA}"
+          fi

@@ -91,6 +91,15 @@ services:
 docker compose up -d
 ```
 
+### Cập nhật phiên bản mới
+
+Khi dự án có bản build mới trên GHCR, NAS sẽ không tự thay container đang chạy. Chạy lại các lệnh sau để kéo image mới và recreate container:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
 ### Chạy trên Synology Container Manager (DSM Web UI):
 1. Mở **Container Manager** trên Synology DSM.
 2. Chọn **Project** $\rightarrow$ Click **Create**.
