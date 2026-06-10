@@ -53,7 +53,7 @@ version: '3.8'
 
 services:
   synology-telegram-downloader:
-    build: .
+    image: ghcr.io/leolionart/synology-telegram-downloader:latest
     container_name: synology-telegram-downloader
     restart: always
     env_file:
@@ -68,7 +68,7 @@ services:
 Dự án được tự động build và push lên GHCR tại địa chỉ:
 `ghcr.io/leolionart/synology-telegram-downloader:latest`
 
-Bạn có thể cấu hình `docker-compose.yml` để sử dụng trực tiếp image đã build sẵn thay vì tự build:
+File `docker-compose.yml` mặc định đã sử dụng image này, nên bạn không cần build source code trên NAS:
 ```yaml
 services:
   synology-telegram-downloader:
@@ -84,8 +84,8 @@ services:
 ### Chạy bằng dòng lệnh (SSH vào NAS/Server):
 
 ```bash
-# Khởi chạy ở chế độ chạy ngầm và tự động build
-docker compose up -d --build
+# Khởi chạy ở chế độ chạy ngầm
+docker compose up -d
 ```
 
 ### Chạy trên Synology Container Manager (DSM Web UI):

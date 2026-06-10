@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   synology-telegram-downloader:
-    build: .
+    image: ghcr.io/leolionart/synology-telegram-downloader:latest
     container_name: synology-telegram-downloader
     restart: always
     env_file:
