@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  telegram-downloader:
+    build: .
+    container_name: telegram-gdrive-downloader
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      # Thay đường dẫn bên trái bằng đường dẫn tuyệt đối thư mục NAS của bạn
+      # Ví dụ: /volumeUSB1/usbshare/Movies:/downloads
+      - /volumeUSB1/usbshare/Movies:/downloads
