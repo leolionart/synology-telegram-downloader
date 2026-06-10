@@ -1,4 +1,4 @@
-# Telegram GDrive NAS Downloader 🎥🚀
+# Synology Telegram Downloader 🎥🚀
 
 Dịch vụ tự động hóa tải phim đa luồng từ Google Drive (thông qua GDrive Index Worker) trực tiếp về NAS Synology, điều khiển trực quan qua Telegram Bot.
 
@@ -52,9 +52,9 @@ Mở file `docker-compose.yml` và chỉnh sửa đường dẫn mount ổ cứn
 version: '3.8'
 
 services:
-  telegram-downloader:
+  synology-telegram-downloader:
     build: .
-    container_name: telegram-gdrive-downloader
+    container_name: synology-telegram-downloader
     restart: always
     env_file:
       - .env
@@ -66,14 +66,14 @@ services:
 ### Docker Image trên GitHub Container Registry (GHCR)
 
 Dự án được tự động build và push lên GHCR tại địa chỉ:
-`ghcr.io/leolionart/telegram-gdrive-downloader:latest`
+`ghcr.io/leolionart/synology-telegram-downloader:latest`
 
 Bạn có thể cấu hình `docker-compose.yml` để sử dụng trực tiếp image đã build sẵn thay vì tự build:
 ```yaml
 services:
-  telegram-downloader:
-    image: ghcr.io/leolionart/telegram-gdrive-downloader:latest
-    container_name: telegram-gdrive-downloader
+  synology-telegram-downloader:
+    image: ghcr.io/leolionart/synology-telegram-downloader:latest
+    container_name: synology-telegram-downloader
     # ... (các cấu hình khác giữ nguyên)
 ```
 
@@ -91,7 +91,7 @@ docker compose up -d --build
 ### Chạy trên Synology Container Manager (DSM Web UI):
 1. Mở **Container Manager** trên Synology DSM.
 2. Chọn **Project** $\rightarrow$ Click **Create**.
-3. Chọn đường dẫn lưu trữ dự án, đặt tên dự án là `telegram-gdrive-downloader`.
+3. Chọn đường dẫn lưu trữ dự án, đặt tên dự án là `synology-telegram-downloader`.
 4. Chọn nguồn là **Create docker-compose.yml** và dán nội dung file `docker-compose.yml` vào.
 5. Tạo file `.env` chứa các biến cấu hình trong cùng thư mục lưu trữ dự án.
 6. Click **Next** và tiến hành chạy dự án.

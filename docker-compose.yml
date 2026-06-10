@@ -1,9 +1,9 @@
 version: '3.8'
 
 services:
-  telegram-downloader:
+  synology-telegram-downloader:
     build: .
-    container_name: telegram-gdrive-downloader
+    container_name: synology-telegram-downloader
     restart: always
     env_file:
       - .env

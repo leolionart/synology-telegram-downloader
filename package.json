@@ -1,5 +1,5 @@
 {
-  "name": "telegram-gdrive-downloader",
+  "name": "synology-telegram-downloader",
   "version": "1.0.0",
   "description": "A Dockerized Telegram Bot that logins to GDrive Index worker and downloads files directly to your NAS via aria2c",
   "main": "index.js",
