@@ -35,6 +35,9 @@ TELEGRAM_BOT_TOKEN=1234567890:ABCdefGhIJKlmNoPQRsTUVwxyZ
 # ID tài khoản Telegram của bạn được phép ra lệnh cho Bot (Cách nhau bằng dấu phẩy)
 ALLOWED_CHAT_IDS=441916814
 
+# ID tài khoản Telegram có quyền quản trị (tuỳ chọn, cách nhau bằng dấu phẩy)
+ADMIN_CHAT_IDS=441916814
+
 # Đường dẫn đến Cloudflare GDrive Index Worker của bạn
 WORKERS_URL=https://botup.csvmen.workers.dev
 WORKERS_USERNAME=botup
@@ -99,7 +102,31 @@ docker compose up -d
 ---
 
 ## 📱 Hướng Dẫn Sử Dụng
-1. Mở chat với Bot Telegram của bạn và nhấn `/start`.
-2. Gửi bất kỳ link Google Drive thường nào (ví dụ: `https://drive.google.com/file/d/xxxx/view`) hoặc link GDrive Index trực tiếp (`https://botup.csvmen.workers.dev/...`).
-3. Bot sẽ tự động đăng nhập, lấy tên phim, tạo tiến trình tải đa luồng và liên tục cập nhật tiến độ tải cho bạn trực quan trên Telegram.
-4. Khi tải xong, phim sẽ xuất hiện ngay lập tức trong thư mục `/volumeUSB1/usbshare/Movies` trên NAS của bạn!
+
+### 1. Cách Tải Phim/File
+- **Tự động nhận diện URL:** Chỉ cần gửi trực tiếp link Google Drive thường (ví dụ: `https://drive.google.com/file/d/xxxx/view`) hoặc link GDrive Index trực tiếp (`https://botup.csvmen.workers.dev/...`) vào đoạn chat với Bot.
+- **Sử dụng lệnh tải:** Sử dụng lệnh `/download <url>` hoặc `/dl <url>`.
+
+### 2. Các Lệnh Điều Khiển Bot
+Bot hỗ trợ đầy đủ các lệnh điều khiển trực quan sau:
+
+- `/start`: Hiển thị lời chào và tóm tắt các lệnh nhanh.
+- `/help`: Xem chi tiết cách sử dụng từng lệnh kèm ví dụ.
+- `/download <url>` hoặc `/dl <url>`: Bắt đầu tải phim từ link Google Drive hoặc link GDrive Index.
+- `/queue`: Xem danh sách các tiến trình đang tải hoặc đang chuẩn bị.
+- `/status [job_id]`: Xem trạng thái hiện tại (nếu điền `job_id`, bot hiển thị chi tiết tiến độ, tốc độ, ETA, thư mục lưu và link gốc của job đó).
+- `/cancel <job_id>`: Dừng/hủy tiến trình tải đang chạy.
+- `/retry <job_id>`: Tải lại một tiến trình đã thất bại/đã hủy/hoàn thành bằng liên kết cũ.
+- `/history`: Xem lịch sử của 10 lượt tải gần nhất.
+- `/downloads`: Liệt kê các file đã tải về nằm trong thư mục tải hiện tại của chat.
+- `/setdir <subfolder>`: Thiết lập thư mục tải về riêng (thư mục con tương đối nằm dưới thư mục chính).
+  - Ví dụ: `/setdir PhimLe`
+  - Thiết lập lại về thư mục gốc: `/setdir root` hoặc `/setdir .`
+- `/config`: Xem cấu hình hiện tại của bot (Ẩn các thông tin nhạy cảm như token, mật khẩu).
+- `/health`: Kiểm tra sức khỏe hệ thống (thư mục tải có ghi được không, aria2c có hoạt động không, kết nối đến Index Worker có thông suốt không).
+
+### 3. Phân Quyền Quản Trị (Optional)
+Nếu bạn cấu hình biến `ADMIN_CHAT_IDS` trong file `.env`:
+- Chỉ các tài khoản Telegram nằm trong danh sách Admin mới được phép sử dụng lệnh `/setdir` và `/config`.
+- Lệnh `/cancel` chỉ có thể được thực hiện bởi Admin hoặc chính tài khoản Telegram đã gửi yêu cầu tải job đó.
+- Nếu không cấu hình `ADMIN_CHAT_IDS`, toàn bộ tài khoản được khai báo ở `ALLOWED_CHAT_IDS` đều được sử dụng tất cả các lệnh trên.
