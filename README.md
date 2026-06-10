@@ -63,6 +63,20 @@ services:
       - /volumeUSB1/usbshare/Movies:/downloads
 ```
 
+### Docker Image trên GitHub Container Registry (GHCR)
+
+Dự án được tự động build và push lên GHCR tại địa chỉ:
+`ghcr.io/leolionart/telegram-gdrive-downloader:latest`
+
+Bạn có thể cấu hình `docker-compose.yml` để sử dụng trực tiếp image đã build sẵn thay vì tự build:
+```yaml
+services:
+  telegram-downloader:
+    image: ghcr.io/leolionart/telegram-gdrive-downloader:latest
+    container_name: telegram-gdrive-downloader
+    # ... (các cấu hình khác giữ nguyên)
+```
+
 ---
 
 ## 🚀 Khởi Chạy Dịch Vụ
