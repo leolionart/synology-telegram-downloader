@@ -46,6 +46,7 @@ const telegramCommands = [
   { command: 'history', description: 'Xem lịch sử tải gần đây' },
   { command: 'downloads', description: 'Liệt kê file đã tải gần đây' },
   { command: 'setdir', description: 'Đặt thư mục con tải về' },
+  { command: 'folders', description: 'Danh sách thư mục con để chọn nhanh' },
   { command: 'config', description: 'Xem cấu hình không nhạy cảm' },
   { command: 'health', description: 'Kiểm tra sức khỏe hệ thống' }
 ];
@@ -246,6 +247,61 @@ function validateSetdirPath(subfolder) {
   }
 
   return { valid: true, path: normalized };
+}
+
+function getTopLevelDownloadFolders() {
+  let folders = [];
+  try {
+    if (fs.existsSync(downloadDir)) {
+      folders = fs.readdirSync(downloadDir).filter(file => {
+        try {
+          const fullPath = path.join(downloadDir, file);
+          const stats = fs.statSync(fullPath);
+          return stats.isDirectory() && !file.startsWith('.');
+        } catch (err) {
+          return false;
+        }
+      });
+    }
+  } catch (err) {
+    console.error('Error reading download directory:', err.message);
+  }
+
+  return folders;
+}
+
+// Send Inline Keyboard for Folder Selection
+function sendFolderSelectionKeyboard(chatId) {
+  const folders = getTopLevelDownloadFolders();
+  const chatDir = chatSettings[chatId] ? chatSettings[chatId].downloadSubdir : '';
+  const currentFolderText = chatDir ? `\`${chatDir}\`` : '`Thư mục gốc (root)`';
+
+  const rows = [];
+  // Root option button
+  rows.push([{ text: '📁 Thư mục gốc (Root)', callback_data: 'setdir:root' }]);
+
+  // Add subfolders as inline buttons
+  folders.forEach(folder => {
+    const encoded = encodeURIComponent(folder);
+    if (encoded.length <= 57) {
+      rows.push([{ text: `📂 ${folder}`, callback_data: `setdir:${encoded}` }]);
+    } else {
+      console.warn(`Folder name "${folder}" is too long for callback_data.`);
+    }
+  });
+
+  const msgText = `📁 *Chọn thư mục tải về:*\n\n` +
+    `Thư mục hiện tại: ${currentFolderText}\n\n` +
+    (folders.length > 0
+      ? 'Chọn một thư mục bên dưới:'
+      : `Chưa có thư mục con nào. Bạn vẫn có thể chọn root, tạo thư mục trên NAS dưới thư mục tải đã mount, hoặc dùng \`/setdir <tên-thư-mục>\` để tạo thư mục mới.`);
+
+  bot.sendMessage(chatId, msgText, {
+    parse_mode: 'Markdown',
+    reply_markup: {
+      inline_keyboard: rows
+    }
+  });
 }
 
 // Health Check Helper
@@ -546,10 +602,19 @@ bot.on('message', async (msg) => {
         `/history - Xem lịch sử tải gần đây\n` +
         `/downloads - Xem file tải về gần đây\n` +
         `/setdir <folder> - Đặt thư mục con\n` +
+        `/folders - Danh sách thư mục con\n` +
         `/config - Xem cấu hình\n` +
         `/health - Kiểm tra hệ thống\n` +
         `/help - Xem hướng dẫn chi tiết`;
-      bot.sendMessage(chatId, welcome);
+      bot.sendMessage(chatId, welcome, {
+        reply_markup: {
+          keyboard: [
+            ['/dl', '/queue', '/status', '/downloads'],
+            ['/folders', '/history', '/health', '/help']
+          ],
+          resize_keyboard: true
+        }
+      });
       return;
     }
 
@@ -572,9 +637,19 @@ bot.on('message', async (msg) => {
         `- \`/setdir <folder_name>\`: Đặt thư mục con trong \`DOWNLOAD_DIR\` cho chat này.\n` +
         `  - Ví dụ: \`/setdir PhimLe\`\n` +
         `  - Trở lại thư mục gốc: \`/setdir root\` hoặc \`/setdir .\`\n` +
+        `- \`/folders\`: Xem danh sách thư mục con dưới dạng nút bấm để chọn nhanh.\n` +
         `- \`/config\`: Xem các thông số cấu hình hệ thống (Admin).\n` +
         `- \`/health\`: Kiểm tra thư mục ghi, công cụ tải, và kết nối Worker.`;
-      bot.sendMessage(chatId, helpText, { parse_mode: 'Markdown' });
+      bot.sendMessage(chatId, helpText, {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          keyboard: [
+            ['/dl', '/queue', '/status', '/downloads'],
+            ['/folders', '/history', '/health', '/help']
+          ],
+          resize_keyboard: true
+        }
+      });
       return;
     }
 
@@ -871,8 +946,7 @@ bot.on('message', async (msg) => {
       }
 
       if (!args) {
-        const chatDir = chatSettings[chatId] ? chatSettings[chatId].downloadSubdir : '';
-        bot.sendMessage(chatId, `📁 Thư mục con tải về hiện tại của chat này là: \`${chatDir || '(root)'}\``, { parse_mode: 'Markdown' });
+        sendFolderSelectionKeyboard(chatId);
         return;
       }
 
@@ -901,6 +975,17 @@ bot.on('message', async (msg) => {
       }
 
       bot.sendMessage(chatId, `✅ Đã thay đổi thư mục con tải về thành: \`${subfolderPath || '(root)'}\``, { parse_mode: 'Markdown' });
+      return;
+    }
+
+    // /folders
+    if (command === '/folders') {
+      if (adminChatIds.length > 0 && !isAdmin(chatId)) {
+        bot.sendMessage(chatId, '⚠️ Bạn không có quyền quản trị để thay đổi thư mục tải.');
+        return;
+      }
+
+      sendFolderSelectionKeyboard(chatId);
       return;
     }
 
@@ -977,5 +1062,83 @@ bot.on('message', async (msg) => {
       addJob(job);
       runDownloadJob(job);
     }
+  }
+});
+
+// Handle callback query for folder selection
+bot.on('callback_query', async (callbackQuery) => {
+  const data = callbackQuery.data;
+  if (!data) return;
+
+  if (data.startsWith('setdir:')) {
+    const msg = callbackQuery.message;
+    if (!msg || !msg.chat) {
+      bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Không xác định được chat.', show_alert: true });
+      return;
+    }
+
+    const chatId = msg.chat.id;
+
+    if (!isChatAllowed(chatId)) {
+      bot.answerCallbackQuery(callbackQuery.id, { text: '⚠️ Bạn không được phép sử dụng bot này.', show_alert: true });
+      return;
+    }
+
+    if (adminChatIds.length > 0 && !isAdmin(chatId)) {
+      bot.answerCallbackQuery(callbackQuery.id, { text: '⚠️ Bạn không có quyền quản trị để thay đổi thư mục tải.', show_alert: true });
+      return;
+    }
+
+    const encodedFolder = data.substring(7);
+    let subfolder = '';
+    try {
+      subfolder = decodeURIComponent(encodedFolder);
+    } catch (err) {
+      bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Dữ liệu không hợp lệ.', show_alert: true });
+      return;
+    }
+
+    if (subfolder === 'root' || subfolder === '.') {
+      subfolder = '';
+    }
+
+    if (subfolder !== '') {
+      const validation = validateSetdirPath(subfolder);
+      if (!validation.valid) {
+        bot.answerCallbackQuery(callbackQuery.id, { text: `❌ Đường dẫn không hợp lệ: ${validation.reason}`, show_alert: true });
+        return;
+      }
+
+      if (!getTopLevelDownloadFolders().includes(subfolder)) {
+        bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Thư mục này không còn trong danh sách hiện tại.', show_alert: true });
+        return;
+      }
+
+      const fullPath = path.join(downloadDir, subfolder);
+      try {
+        const stats = fs.statSync(fullPath);
+        if (!stats.isDirectory()) {
+          bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Đường dẫn không phải là một thư mục.', show_alert: true });
+          return;
+        }
+      } catch (err) {
+        bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Thư mục không tồn tại.', show_alert: true });
+        return;
+      }
+    }
+
+    // Update settings
+    if (!chatSettings[chatId]) {
+      chatSettings[chatId] = {};
+    }
+    chatSettings[chatId].downloadSubdir = subfolder;
+    saveSettings();
+
+    bot.answerCallbackQuery(callbackQuery.id, { text: '✅ Đã cập nhật thư mục tải.' });
+    bot.editMessageText(`✅ Đã thay đổi thư mục con tải về thành: \`${subfolder || '(root)'}\``, {
+      chat_id: chatId,
+      message_id: msg.message_id,
+      parse_mode: 'Markdown'
+    }).catch(console.error);
   }
 });

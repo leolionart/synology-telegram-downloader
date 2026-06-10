@@ -117,7 +117,7 @@ docker compose up -d
 - **Sử dụng lệnh tải:** Sử dụng lệnh `/download <url>` hoặc `/dl <url>`.
 
 ### 2. Các Lệnh Điều Khiển Bot
-Bot hỗ trợ đầy đủ các lệnh điều khiển trực quan sau:
+Bot hỗ trợ đầy đủ các lệnh điều khiển trực quan sau. Sau khi bot khởi động, Telegram cũng sẽ hiện command menu và bàn phím nhanh khi bạn dùng `/start` hoặc `/help`.
 
 - `/start`: Hiển thị lời chào và tóm tắt các lệnh nhanh.
 - `/help`: Xem chi tiết cách sử dụng từng lệnh kèm ví dụ.
@@ -128,9 +128,11 @@ Bot hỗ trợ đầy đủ các lệnh điều khiển trực quan sau:
 - `/retry <job_id>`: Tải lại một tiến trình đã thất bại/đã hủy/hoàn thành bằng liên kết cũ.
 - `/history`: Xem lịch sử của 10 lượt tải gần nhất.
 - `/downloads`: Liệt kê các file đã tải về nằm trong thư mục tải hiện tại của chat.
+- `/folders`: Hiển thị các thư mục con có sẵn dưới dạng nút bấm để chọn nhanh thư mục tải.
 - `/setdir <subfolder>`: Thiết lập thư mục tải về riêng (thư mục con tương đối nằm dưới thư mục chính).
   - Ví dụ: `/setdir PhimLe`
   - Thiết lập lại về thư mục gốc: `/setdir root` hoặc `/setdir .`
+  - Nếu chỉ gõ `/setdir`, bot sẽ mở danh sách thư mục có sẵn để bấm chọn.
 - `/config`: Xem cấu hình hiện tại của bot (Ẩn các thông tin nhạy cảm như token, mật khẩu).
 - `/health`: Kiểm tra sức khỏe hệ thống (thư mục tải có ghi được không, aria2c có hoạt động không, kết nối đến Index Worker có thông suốt không).
 
