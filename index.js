@@ -155,8 +155,8 @@ function serializeJobForHistory(job) {
 }
 
 function pruneJobs() {
-  const activeJobs = jobs.filter(job => ['preparing', 'downloading'].includes(job.status));
-  const completedJobs = jobs.filter(job => !['preparing', 'downloading'].includes(job.status));
+  const activeJobs = jobs.filter(job => ['preparing', 'downloading', 'paused'].includes(job.status));
+  const completedJobs = jobs.filter(job => !['preparing', 'downloading', 'paused'].includes(job.status));
 
   if (completedJobs.length > 100) {
     completedJobs.sort((a, b) => a.createdAt - b.createdAt);
@@ -366,80 +366,44 @@ async function checkHealth() {
   return health;
 }
 
-// Background Job Runner
-async function runDownloadJob(job) {
+function normalizeMovieName(filename) {
+  if (!filename) return '';
+
+  // 1. Remove extension (last dot followed by 2-4 alphanumeric characters at the end)
+  let name = filename.replace(/\.[a-zA-Z0-9]{2,4}$/, '');
+
+  // Convert to lowercase
+  name = name.toLowerCase();
+
+  // 2. Define the tokens to remove
+  const tokenPatterns = [
+    'hdcam', 'hdrip', 'webrip', 'web-dl', 'webdl', 'bluray', 'brrip', 'dvdrip', 'hdtc', 'hdts',
+    '2160p', '1080p', '720p', '4k', 'x264', 'x265', 'hevc', 'h264', 'h265', 'dd5\\.1', 'dd51',
+    'aac', 'dts', 'cam'
+  ];
+
+  // Replace each token pattern surrounded by word boundaries
+  tokenPatterns.forEach(token => {
+    const regex = new RegExp(`\\b${token}\\b`, 'gi');
+    name = name.replace(regex, ' ');
+  });
+
+  // 3. Replace all punctuation/delimiters with spaces
+  name = name.replace(/[\._\-()[\]{}]/g, ' ');
+
+  // 4. Clean up spaces
+  name = name.replace(/\s+/g, ' ').trim();
+
+  return name;
+}
+
+async function continueDownloadAfterDecision(job) {
   const chatId = job.chatId;
-  const rawUrl = job.originalUrl;
+  const filename = job.filename;
+  const cookie = job.cookie;
+  const directFileUrl = job.directFileUrl;
 
   try {
-    let downloadUrl = null;
-    if (rawUrl.includes(workersUrl.replace('https://', ''))) {
-      downloadUrl = rawUrl;
-    } else {
-      const driveId = extractDriveId(rawUrl);
-      if (driveId) {
-        downloadUrl = `${workersUrl}/0:findpath?id=${driveId}&view=false`;
-      }
-    }
-
-    if (!downloadUrl) {
-      job.status = 'failed';
-      job.updatedAt = new Date();
-      saveHistory();
-      bot.editMessageText(`⚠️ *Job #${job.id}:* Đường dẫn không hợp lệ. Tôi chỉ nhận diện được link Google Drive trực tiếp hoặc link GDrive Index.`, {
-        chat_id: chatId,
-        message_id: job.statusMsgId,
-        parse_mode: 'Markdown'
-      }).catch(console.error);
-      return;
-    }
-
-    if (job.status === 'cancelled') return;
-
-    // 1. Login to Workers
-    console.log(`[Job #${job.id}] Logging in to GDrive Index worker...`);
-    const loginRes = await axios.post(`${workersUrl}/login`,
-      new URLSearchParams({
-        username: workersUsername,
-        password: workersPassword
-      }),
-      {
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        allowRedirects: false,
-        validateStatus: (status) => status < 400
-      }
-    );
-
-    const setCookie = loginRes.headers['set-cookie'];
-    if (!setCookie || setCookie.length === 0) {
-      throw new Error('Không nhận được session cookie sau khi đăng nhập.');
-    }
-
-    const sessionCookieStr = setCookie.find(c => c.trim().startsWith('session='));
-    if (!sessionCookieStr) {
-      throw new Error('Không tìm thấy cookie session trong response đăng nhập.');
-    }
-    const cookie = sessionCookieStr.split(';')[0];
-
-    if (job.status === 'cancelled') return;
-
-    // 2. Fetch Direct Redirect Link
-    console.log(`[Job #${job.id}] Fetching direct link from GDrive Index...`);
-    const redirectRes = await axios.get(downloadUrl, {
-      headers: { 'Cookie': cookie },
-      maxRedirects: 0,
-      validateStatus: (status) => status >= 300 && status < 400
-    });
-
-    const directFileUrl = redirectRes.headers['location'];
-    if (!directFileUrl) {
-      throw new Error('Máy chủ Index không trả về link redirect (Location header).');
-    }
-
-    const encodedFilename = directFileUrl.split('/').pop().split('?')[0];
-    const filename = decodeURIComponent(encodedFilename);
-
-    job.filename = filename;
     job.status = 'downloading';
     job.updatedAt = new Date();
     saveHistory();
@@ -457,7 +421,7 @@ async function runDownloadJob(job) {
       fs.mkdirSync(job.targetDir, { recursive: true });
     }
 
-    // 3. Spawn aria2c process
+    // Spawn aria2c process
     console.log(`[Job #${job.id}] Starting aria2c download for: ${filename}`);
     const ariaArgs = [
       '--summary-interval=1',
@@ -551,6 +515,192 @@ async function runDownloadJob(job) {
         }).catch(console.error);
       }
     });
+
+  } catch (error) {
+    console.error(`[Job #${job.id}] Error in continueDownloadAfterDecision:`, error.message);
+    if (job.status !== 'cancelled') {
+      job.status = 'failed';
+      job.updatedAt = new Date();
+      saveHistory();
+
+      let errorMsg = error.message;
+      if (error.response && error.response.data) {
+        errorMsg = typeof error.response.data === 'string' ? error.response.data : JSON.stringify(error.response.data);
+      }
+
+      bot.editMessageText(`❌ *Job #${job.id} - Lỗi:*\n\`${escapeMarkdown(errorMsg.substring(0, 300))}\``, {
+        chat_id: chatId,
+        message_id: job.statusMsgId,
+        parse_mode: 'Markdown'
+      }).catch(console.error);
+    }
+  }
+}
+
+// Background Job Runner
+async function runDownloadJob(job) {
+  const chatId = job.chatId;
+  const rawUrl = job.originalUrl;
+
+  try {
+    let downloadUrl = null;
+    if (rawUrl.includes(workersUrl.replace('https://', ''))) {
+      downloadUrl = rawUrl;
+    } else {
+      const driveId = extractDriveId(rawUrl);
+      if (driveId) {
+        downloadUrl = `${workersUrl}/0:findpath?id=${driveId}&view=false`;
+      }
+    }
+
+    if (!downloadUrl) {
+      job.status = 'failed';
+      job.updatedAt = new Date();
+      saveHistory();
+      bot.editMessageText(`⚠️ *Job #${job.id}:* Đường dẫn không hợp lệ. Tôi chỉ nhận diện được link Google Drive trực tiếp hoặc link GDrive Index.`, {
+        chat_id: chatId,
+        message_id: job.statusMsgId,
+        parse_mode: 'Markdown'
+      }).catch(console.error);
+      return;
+    }
+
+    if (job.status === 'cancelled') return;
+
+    // 1. Login to Workers
+    console.log(`[Job #${job.id}] Logging in to GDrive Index worker...`);
+    const loginRes = await axios.post(`${workersUrl}/login`,
+      new URLSearchParams({
+        username: workersUsername,
+        password: workersPassword
+      }),
+      {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        allowRedirects: false,
+        validateStatus: (status) => status < 400
+      }
+    );
+
+    const setCookie = loginRes.headers['set-cookie'];
+    if (!setCookie || setCookie.length === 0) {
+      throw new Error('Không nhận được session cookie sau khi đăng nhập.');
+    }
+
+    const sessionCookieStr = setCookie.find(c => c.trim().startsWith('session='));
+    if (!sessionCookieStr) {
+      throw new Error('Không tìm thấy cookie session trong response đăng nhập.');
+    }
+    const cookie = sessionCookieStr.split(';')[0];
+
+    if (job.status === 'cancelled') return;
+
+    // 2. Fetch Direct Redirect Link
+    console.log(`[Job #${job.id}] Fetching direct link from GDrive Index...`);
+    const redirectRes = await axios.get(downloadUrl, {
+      headers: { 'Cookie': cookie },
+      maxRedirects: 0,
+      validateStatus: (status) => status >= 300 && status < 400
+    });
+
+    const directFileUrl = redirectRes.headers['location'];
+    if (!directFileUrl) {
+      throw new Error('Máy chủ Index không trả về link redirect (Location header).');
+    }
+
+    const encodedFilename = directFileUrl.split('/').pop().split('?')[0];
+    const filename = decodeURIComponent(encodedFilename);
+
+    job.filename = filename;
+    job.directFileUrl = directFileUrl;
+    job.cookie = cookie;
+
+    // Ensure targetDir exists before checking files
+    if (!fs.existsSync(job.targetDir)) {
+      fs.mkdirSync(job.targetDir, { recursive: true });
+    }
+
+    // Read existing files in targetDir
+    let files = [];
+    try {
+      files = fs.readdirSync(job.targetDir).filter(file => {
+        try {
+          const stats = fs.statSync(path.join(job.targetDir, file));
+          return stats.isFile();
+        } catch (err) {
+          return false;
+        }
+      });
+    } catch (err) {
+      console.error(`Error reading target directory for duplicates: ${err.message}`);
+      bot.sendMessage(chatId, `⚠️ Lỗi khi đọc thư mục để kiểm tra trùng lặp: ${err.message}`);
+    }
+
+    // Check for exact duplicate filename
+    const exactMatch = files.find(f => f === filename);
+    if (exactMatch) {
+      const exactPath = path.join(job.targetDir, exactMatch);
+      console.log(`[Job #${job.id}] Exact duplicate filename found: ${exactMatch}. Deleting automatically.`);
+      try {
+        fs.unlinkSync(exactPath);
+        await bot.sendMessage(chatId, `📝 *Job #${job.id}:* Phát hiện file trùng tên chính xác \`${escapeMarkdown(filename)}\`. Tiến hành xóa và tải lại tự động.`);
+      } catch (err) {
+        console.error(`Failed to delete exact duplicate: ${err.message}`);
+        bot.sendMessage(chatId, `⚠️ Lỗi khi xóa file trùng tên chính xác: ${err.message}`);
+      }
+    }
+
+    // Normalize and check for similar movie title
+    const newNormalized = normalizeMovieName(filename);
+
+    let similarFiles = [];
+    if (newNormalized) {
+      similarFiles = files.filter(f => {
+        if (f === filename) return false;
+        const norm = normalizeMovieName(f);
+        return norm && norm === newNormalized;
+      });
+    }
+
+    if (similarFiles.length > 0) {
+      job.status = 'paused';
+      job.similarFiles = similarFiles;
+      job.updatedAt = new Date();
+      saveHistory();
+
+      // Show the first few similar files
+      const displayFiles = similarFiles.slice(0, 3).map(f => `\`${escapeMarkdown(f)}\``).join('\n');
+      const extraCount = similarFiles.length - 3;
+      const extraText = extraCount > 0 ? `\n... và ${extraCount} file khác` : '';
+
+      const promptText = `⚠️ *Phát hiện phim tương tự đã có trên NAS Synology!*\n\n` +
+        `🎥 *Phim đang tải:* \`${escapeMarkdown(filename)}\`\n\n` +
+        `📂 *Các file phim tương tự đã có:* \n${displayFiles}${extraText}\n\n` +
+        `Bạn muốn xử lý như thế nào? (Nếu chọn "Thay thế", bot sẽ xóa toàn bộ các file phim tương tự ở trên để tránh rác)`;
+
+      const inlineKeyboard = [
+        [
+          { text: '🗑️ Thay thế file cũ', callback_data: `dup:replace:${job.id}` },
+          { text: '📂 Giữ cả hai', callback_data: `dup:keep:${job.id}` }
+        ],
+        [
+          { text: '❌ Hủy tải', callback_data: `dup:cancel:${job.id}` }
+        ]
+      ];
+
+      await bot.editMessageText(promptText, {
+        chat_id: chatId,
+        message_id: job.statusMsgId,
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: inlineKeyboard
+        }
+      }).catch(console.error);
+
+      return; // Pause the job and wait for user choice, do not start aria2c
+    }
+
+    // If no similar files, continue download immediately
+    await continueDownloadAfterDecision(job);
 
   } catch (error) {
     console.error(`[Job #${job.id}] Error handling link:`, error.message);
@@ -698,9 +848,9 @@ bot.on('message', async (msg) => {
     // /queue
     if (command === '/queue') {
       const visibleJobs = getVisibleJobs(chatId);
-      const activeJobs = visibleJobs.filter(j => ['preparing', 'downloading'].includes(j.status));
+      const activeJobs = visibleJobs.filter(j => ['preparing', 'downloading', 'paused'].includes(j.status));
       if (activeJobs.length === 0) {
-        const recent = visibleJobs.filter(j => !['preparing', 'downloading'].includes(j.status)).slice(-5);
+        const recent = visibleJobs.filter(j => !['preparing', 'downloading', 'paused'].includes(j.status)).slice(-5);
         let msgText = '📭 *Hàng chờ trống.* Không có tiến trình nào đang tải.\n';
         if (recent.length > 0) {
           msgText += '\n*Các tiến trình gần đây:*';
@@ -715,7 +865,8 @@ bot.on('message', async (msg) => {
       let msgText = '📥 *Hàng chờ tải hiện tại:*';
       activeJobs.forEach(j => {
         const pct = j.percent || 0;
-        msgText += `\n\n*Job #${j.id}:* \`${escapeMarkdown(j.filename)}\`` +
+        const statusSuffix = j.status === 'paused' ? ' (Chờ xác nhận)' : '';
+        msgText += `\n\n*Job #${j.id}${statusSuffix}:* \`${escapeMarkdown(j.filename)}\`` +
           `\n📊 Tiến độ: ${getProgressBar(pct)}` +
           `\n⚡️ Tốc độ: \`${j.speed}/s\` | Đã tải: \`${j.downloadedSize}\` / \`${j.totalSize}\` | Còn lại: \`${j.eta}\`` +
           `\n📁 Thư mục: \`${escapeMarkdown(path.basename(j.targetDir) || 'root')}\``;
@@ -736,6 +887,7 @@ bot.on('message', async (msg) => {
 
         const statusIcons = {
           preparing: '🔍 Chuẩn bị',
+          paused: '⏸️ Chờ xác nhận trùng',
           downloading: '📥 Đang tải',
           completed: '✅ Hoàn thành',
           failed: '❌ Thất bại',
@@ -754,7 +906,7 @@ bot.on('message', async (msg) => {
 
         bot.sendMessage(chatId, msgText, { parse_mode: 'Markdown' });
       } else {
-        const activeJobs = getVisibleJobs(chatId).filter(j => ['preparing', 'downloading'].includes(j.status));
+        const activeJobs = getVisibleJobs(chatId).filter(j => ['preparing', 'downloading', 'paused'].includes(j.status));
         if (activeJobs.length === 0) {
           bot.sendMessage(chatId, '📭 Không có tiến trình nào đang hoạt động.');
           return;
@@ -763,7 +915,7 @@ bot.on('message', async (msg) => {
         let msgText = '🚦 *Trạng thái các tiến trình đang hoạt động:*';
         activeJobs.forEach(j => {
           msgText += `\n\n*Job #${j.id}:* \`${escapeMarkdown(j.filename)}\` (${j.percent}%)\n` +
-            `- Tốc độ: \`${j.speed}/s\` | Còn lại: \`${j.eta}\` | Trạng thái: \`${j.status}\``;
+            `- Tốc độ: \`${j.speed}/s\` | Còn lại: \`${j.eta}\` | Trạng thái: \`${j.status === 'paused' ? 'Chờ xác nhận trùng' : j.status}\``;
         });
         bot.sendMessage(chatId, msgText, { parse_mode: 'Markdown' });
       }
@@ -783,7 +935,7 @@ bot.on('message', async (msg) => {
         return;
       }
 
-      if (!['preparing', 'downloading'].includes(job.status)) {
+      if (!['preparing', 'downloading', 'paused'].includes(job.status)) {
         bot.sendMessage(chatId, `⚠️ Job #${targetId} đã kết thúc hoặc không ở trạng thái tải (Trạng thái hiện tại: \`${job.status}\`).`);
         return;
       }
@@ -1140,5 +1292,88 @@ bot.on('callback_query', async (callbackQuery) => {
       message_id: msg.message_id,
       parse_mode: 'Markdown'
     }).catch(console.error);
+  }
+
+  if (data.startsWith('dup:')) {
+    const parts = data.split(':');
+    const action = parts[1];
+    const jobId = parseInt(parts[2]);
+
+    const job = jobs.find(j => j.id === jobId);
+    if (!job) {
+      bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Không tìm thấy thông tin Job này.', show_alert: true });
+      return;
+    }
+
+    const senderChatId = callbackQuery.from.id;
+    if (String(senderChatId) !== String(job.chatId) && !isAdmin(senderChatId)) {
+      bot.answerCallbackQuery(callbackQuery.id, { text: '⚠️ Bạn không có quyền quyết định cho job này.', show_alert: true });
+      return;
+    }
+
+    if (job.status !== 'paused') {
+      bot.answerCallbackQuery(callbackQuery.id, { text: `⚠️ Job này đã ở trạng thái: ${job.status}`, show_alert: true });
+      bot.editMessageReplyMarkup({ inline_keyboard: [] }, {
+        chat_id: job.chatId,
+        message_id: job.statusMsgId
+      }).catch(console.error);
+      return;
+    }
+
+    if (!['replace', 'keep', 'cancel'].includes(action)) {
+      bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Lựa chọn không hợp lệ.', show_alert: true });
+      return;
+    }
+
+    job.status = 'preparing';
+    job.updatedAt = new Date();
+
+    if (action === 'replace') {
+      bot.answerCallbackQuery(callbackQuery.id, { text: '🗑️ Đang tiến hành xóa file cũ...' });
+      if (job.similarFiles && Array.isArray(job.similarFiles)) {
+        job.similarFiles.forEach(file => {
+          const filePath = path.join(job.targetDir, file);
+          console.log(`[Job #${job.id}] Deleting similar duplicate: ${filePath}`);
+          try {
+            if (fs.existsSync(filePath)) {
+              fs.unlinkSync(filePath);
+            }
+          } catch (err) {
+            console.error(`Error deleting similar duplicate ${file}: ${err.message}`);
+            bot.sendMessage(job.chatId, `⚠️ Lỗi khi xóa file cũ: ${err.message}`);
+          }
+        });
+      }
+
+      bot.editMessageReplyMarkup({ inline_keyboard: [] }, {
+        chat_id: job.chatId,
+        message_id: job.statusMsgId
+      }).catch(console.error);
+
+      continueDownloadAfterDecision(job);
+
+    } else if (action === 'keep') {
+      bot.answerCallbackQuery(callbackQuery.id, { text: '📂 Tiếp tục tải và giữ cả hai file...' });
+
+      bot.editMessageReplyMarkup({ inline_keyboard: [] }, {
+        chat_id: job.chatId,
+        message_id: job.statusMsgId
+      }).catch(console.error);
+
+      continueDownloadAfterDecision(job);
+
+    } else if (action === 'cancel') {
+      bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Đã hủy tải phim.' });
+
+      job.status = 'cancelled';
+      job.updatedAt = new Date();
+      saveHistory();
+
+      bot.editMessageText(`🚫 *Job #${job.id} - Đã bị hủy!*\nTải phim bị dừng theo yêu cầu của người dùng do phát hiện trùng lặp.`, {
+        chat_id: job.chatId,
+        message_id: job.statusMsgId,
+        parse_mode: 'Markdown'
+      }).catch(console.error);
+    }
   }
 });

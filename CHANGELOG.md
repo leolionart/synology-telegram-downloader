@@ -2,6 +2,7 @@
 
 ## 2026-06-11
 
+- Added duplicate and similar movie file detection. Automatically replaces exact duplicate filenames and prompts the user with inline choices (Replace/Keep/Cancel) for files with different quality/source suffixes (like CAM, 1080p, BluRay, etc.).
 - Renamed the project to Synology Telegram Downloader.
 - Updated Docker Compose examples and GHCR publishing to use the `synology-telegram-downloader` slug.
 - Cleaned up README and documentation to frame the project as an independent tool.

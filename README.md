@@ -13,6 +13,9 @@ Dự án được thiết kế dưới dạng ứng dụng độc lập chạy b
 3. **Báo tiến độ thời gian thực (Real-time Progress):** Tự động chỉnh sửa tin nhắn Telegram hiển thị thanh phần trăm tải (`████░░░░░░ 40%`), tốc độ tải, dung lượng đã tải, và thời gian hoàn thành dự kiến (ETA).
 4. **Mount thư mục trực tiếp (Docker Volumes):** Ghi file trực tiếp xuống ổ cứng NAS thông qua Docker volume mount, không phát sinh dữ liệu đệm trung gian trên máy chủ chạy bot.
 5. **Tự động xử lý Cookie:** Tự động đăng nhập vào Worker lấy session cookie thô gửi cho aria2, không bị lỗi phân tách dấu `=` hay `|` trong bash.
+6. **Tránh tải trùng phim (Duplicate Prevention):**
+   - **Trùng tên file chính xác:** Tự động xóa file cũ và tải đè file mới mà không cần hỏi.
+   - **Trùng tiêu đề phim (Khác chất lượng/nguồn CAM/HD/1080p...):** Bot sẽ tự động chuẩn hóa tên phim (loại bỏ các hậu tố như CAM, HDCAM, HDRip, 1080p, BluRay, x264, v.v.), so sánh với các file hiện có trong thư mục tải. Nếu phát hiện trùng tên phim tương tự, bot sẽ tạm dừng và gửi tin nhắn yêu cầu người dùng xác nhận bằng các nút bấm (Thay thế file cũ, Giữ cả hai, Hủy tải).
 
 ---
 
