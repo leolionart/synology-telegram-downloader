@@ -2,7 +2,7 @@
 
 Dịch vụ tự động hóa tải phim đa luồng từ Google Drive (thông qua GDrive Index Worker) trực tiếp về NAS Synology, điều khiển trực quan qua Telegram Bot.
 
-Dự án này thay thế hoàn toàn cho n8n workflow và Synology Download Station API, khắc phục triệt để các lỗi "Broken Link", lỗi phân quyền SSH, và lỗi hết hạn session cookie.
+Dự án được thiết kế dưới dạng ứng dụng độc lập chạy bằng Docker, hỗ trợ tải file tốc độ cao qua giao thức đa luồng, quản lý tiến trình tải trực quan và khắc phục triệt để lỗi hết hạn session cookie khi tải qua các liên kết GDrive Index.
 
 ---
 
