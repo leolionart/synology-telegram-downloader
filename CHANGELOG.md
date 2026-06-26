@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-06-26
+
+- Fixed connection issues and DNS resolution errors (`getaddrinfo EAI_AGAIN`) on Synology NAS Docker by forcing IPv4 (`family: 4`) for Telegram Bot API requests.
+- Added HTTP/HTTPS proxy support using system environment variables (`HTTP_PROXY`, `HTTPS_PROXY`, `http_proxy`, `https_proxy`).
+- Added cleaner logging for `polling_error` and `error` events to prevent log spamming and make diagnostics easier.
+
 ## 2026-06-11
 
 - Added duplicate and similar movie file detection. Automatically replaces exact duplicate filenames and prompts the user with inline choices (Replace/Keep/Cancel) for files with different quality/source suffixes (like CAM, 1080p, BluRay, etc.).

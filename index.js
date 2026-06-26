@@ -30,8 +30,33 @@ if (!fs.existsSync(downloadDir)) {
   fs.mkdirSync(downloadDir, { recursive: true });
 }
 
-// Initialize Telegram Bot
-const bot = new TelegramBot(token, { polling: true });
+// Initialize Telegram Bot with request options (proxy & IPv4 family force)
+const requestOptions = {};
+
+// Handle proxy configurations if set
+const proxyUrl = process.env.HTTP_PROXY || process.env.HTTPS_PROXY || process.env.http_proxy || process.env.https_proxy;
+if (proxyUrl) {
+  requestOptions.proxy = proxyUrl;
+  console.log(`Using proxy configuration for Telegram Bot: ${proxyUrl}`);
+}
+
+// Force IPv4 by default to avoid DNS resolution/IPv6 issues on Synology NAS Docker
+requestOptions.agentOptions = { family: 4 };
+
+const bot = new TelegramBot(token, {
+  polling: true,
+  request: requestOptions
+});
+
+// Clean and informative error logging for polling errors
+bot.on('polling_error', (error) => {
+  console.error(`[polling_error] Code: ${error.code || 'UNKNOWN'}, Message: ${error.message || error}`);
+});
+
+bot.on('error', (error) => {
+  console.error(`[error] Code: ${error.code || 'UNKNOWN'}, Message: ${error.message || error}`);
+});
+
 console.log('Bot is running and listening for messages...');
 
 const telegramCommands = [
