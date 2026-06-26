@@ -643,15 +643,43 @@ async function runDownloadJob(job) {
 
     if (job.status === 'cancelled') return;
 
-    // 2. Fetch Direct Redirect Link
+    // 2. Fetch Direct Redirect Link (following redirects manually to get the final download URL)
     console.log(`[Job #${job.id}] Fetching direct link from GDrive Index...`);
-    const redirectRes = await axios.get(downloadUrl, {
-      headers: { 'Cookie': cookie },
-      maxRedirects: 0,
-      validateStatus: (status) => status >= 300 && status < 400
-    });
+    let currentUrl = downloadUrl;
+    let redirectCount = 0;
+    let directFileUrl = '';
+    
+    while (redirectCount < 5) {
+      try {
+        const res = await axios.get(currentUrl, {
+          headers: { 'Cookie': cookie },
+          maxRedirects: 0,
+          validateStatus: (status) => status >= 300 && status < 400
+        });
+        
+        const nextUrl = res.headers['location'];
+        if (!nextUrl) {
+          break;
+        }
+        
+        currentUrl = new URL(nextUrl, currentUrl).href;
+        directFileUrl = currentUrl;
+        redirectCount++;
+        
+        // Stop if we reached the final download page
+        if (currentUrl.includes('download.aspx') || currentUrl.includes('confirm=')) {
+          break;
+        }
+      } catch (err) {
+        // If it returns 200 OK directly, then the current URL is the direct file URL
+        if (err.response && err.response.status === 200) {
+          directFileUrl = currentUrl;
+          break;
+        }
+        throw err;
+      }
+    }
 
-    const directFileUrl = redirectRes.headers['location'];
     if (!directFileUrl) {
       throw new Error('Máy chủ Index không trả về link redirect (Location header).');
     }
@@ -660,8 +688,13 @@ async function runDownloadJob(job) {
     const encodedFilename = directFileUrl.split('/').pop().split('?')[0];
     const parsedFilename = decodeURIComponent(encodedFilename);
 
-    // If filename is generic (like download.aspx or empty), query the redirect URL using HEAD to get Content-Disposition
-    if (!parsedFilename || parsedFilename.toLowerCase().endsWith('.aspx') || parsedFilename.toLowerCase() === 'download' || parsedFilename.toLowerCase() === 'uc') {
+    // If filename is generic (like download.aspx, uc, 0:findpath or empty), query the redirect URL using HEAD to get Content-Disposition
+    const lowerFilename = parsedFilename.toLowerCase();
+    if (!parsedFilename || 
+        lowerFilename.endsWith('.aspx') || 
+        lowerFilename === 'download' || 
+        lowerFilename === 'uc' || 
+        lowerFilename.includes('findpath')) {
       console.log(`[Job #${job.id}] Filename from URL path is generic (${parsedFilename}). Fetching Content-Disposition via HEAD...`);
       try {
         const headRes = await axios.head(directFileUrl, {

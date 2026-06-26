@@ -7,6 +7,7 @@
 - Added cleaner logging for `polling_error` and `error` events to prevent log spamming and make diagnostics easier.
 - Sanitized `workersUrl` to remove any trailing slash to prevent double-slash path resolution issues.
 - Fixed generic filename resolution (e.g. `download.aspx`) by sending a `HEAD` request to query the `Content-Disposition` header from the direct redirect URL, extracting the original filename and file format correctly.
+- Handled double-slash path normalization redirects by following redirect URLs in a loop, and added `findpath` / `0:findpath` to generic/invalid filename checks to ensure correct names are resolved for root files.
 
 ## 2026-06-11
 
