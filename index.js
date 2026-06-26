@@ -250,6 +250,27 @@ function escapeMarkdown(text) {
   return text.toString().replace(/([*_`\[\]])/g, '\\$1');
 }
 
+function getFilenameFromContentDisposition(header) {
+  if (!header) return null;
+  
+  const utf8Match = header.match(/filename\*=\s*utf-8''([^;]*)/i);
+  if (utf8Match && utf8Match[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1]);
+    } catch (e) {
+      // Ignore
+    }
+  }
+  
+  const match = header.match(/filename\s*=\s*(?:"([^"]+)"|([^;]+))/i);
+  if (match) {
+    const filename = match[1] || match[2];
+    return filename ? filename.trim() : null;
+  }
+  
+  return null;
+}
+
 // Validate subfolder path for /setdir
 function validateSetdirPath(subfolder) {
   if (!subfolder) {
@@ -635,8 +656,33 @@ async function runDownloadJob(job) {
       throw new Error('Máy chủ Index không trả về link redirect (Location header).');
     }
 
+    let filename = '';
     const encodedFilename = directFileUrl.split('/').pop().split('?')[0];
-    const filename = decodeURIComponent(encodedFilename);
+    const parsedFilename = decodeURIComponent(encodedFilename);
+
+    // If filename is generic (like download.aspx or empty), query the redirect URL using HEAD to get Content-Disposition
+    if (!parsedFilename || parsedFilename.toLowerCase().endsWith('.aspx') || parsedFilename.toLowerCase() === 'download' || parsedFilename.toLowerCase() === 'uc') {
+      console.log(`[Job #${job.id}] Filename from URL path is generic (${parsedFilename}). Fetching Content-Disposition via HEAD...`);
+      try {
+        const headRes = await axios.head(directFileUrl, {
+          headers: { 'Cookie': cookie },
+          timeout: 5000,
+          validateStatus: (status) => status === 200
+        });
+        const contentDisposition = headRes.headers['content-disposition'];
+        if (contentDisposition) {
+          filename = getFilenameFromContentDisposition(contentDisposition);
+          console.log(`[Job #${job.id}] Resolved filename from Content-Disposition: ${filename}`);
+        }
+      } catch (headErr) {
+        console.warn(`[Job #${job.id}] Failed to get Content-Disposition via HEAD:`, headErr.message);
+      }
+    }
+
+    // Fallback to parsed path filename if HEAD request failed or didn't return filename
+    if (!filename) {
+      filename = parsedFilename || `download-${Date.now()}`;
+    }
 
     job.filename = filename;
     job.directFileUrl = directFileUrl;
