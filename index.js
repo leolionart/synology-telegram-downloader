@@ -15,7 +15,10 @@ const adminChatIds = (process.env.ADMIN_CHAT_IDS || '')
   .split(',')
   .map(id => id.trim())
   .filter(id => id);
-const workersUrl = process.env.WORKERS_URL || 'https://botup.csvmen.workers.dev';
+let workersUrl = process.env.WORKERS_URL || 'https://botup.csvmen.workers.dev';
+if (workersUrl.endsWith('/')) {
+  workersUrl = workersUrl.slice(0, -1);
+}
 const workersUsername = process.env.WORKERS_USERNAME || 'botup';
 const workersPassword = process.env.WORKERS_PASSWORD || 'botupquadrive';
 const downloadDir = process.env.DOWNLOAD_DIR || '/downloads';

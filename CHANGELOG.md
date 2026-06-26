@@ -5,6 +5,7 @@
 - Fixed connection issues and DNS resolution errors (`getaddrinfo EAI_AGAIN`) on Synology NAS Docker by forcing IPv4 (`family: 4`) for Telegram Bot API requests.
 - Added HTTP/HTTPS proxy support using system environment variables (`HTTP_PROXY`, `HTTPS_PROXY`, `http_proxy`, `https_proxy`).
 - Added cleaner logging for `polling_error` and `error` events to prevent log spamming and make diagnostics easier.
+- Sanitized `workersUrl` to remove any trailing slash to prevent double-slash path resolution issues.
 
 ## 2026-06-11
 
